@@ -1,0 +1,141 @@
+-- Docker --
+https://hub.docker.com/_/microsoft-dotnet-sdk
+
+asp.net runtime --> Sadece uygulamayı çalıştırmak içindir. 
+
+asp.net sdk --> uygulama geliştirmek, inşa etmek içindir. Sdk içinde runtime vardır.
+
+docker images yada docker image ls
+
+docker ps -a  --> çalışmayan containerlar
+docker ps  --> çalışan containerlar
+
+docker run --name consoledockerapp e890d725013a  --> docker imagei container yapar ve çalışır hale getirir.
+
+docker stop e890d725013a --> containeri durdurur.
+
+docker rm e890d725013a --> containerı siler. --force ile çalışırkende siler.
+
+docker run --rm --name myapp 36420ae08014 --> container oluşturur. 
+	--rm kullanıldığında container durdurursak containerda silinir.
+
+docker rmi 36420ae08014  --> imageı silmek için kullanılır.
+
+docker build - consoleapp:v1 .  --> uygulamanın imagesini oluşturur ve tag verir. 
+
+docker pull mcr.microsoft.com/dotnet/sdk:6.0 --> pull ile bir image hub.docker.com dan indirebiliriz.
+
+--docker huba image göndermek.--
+docker login
+bu adımda https://hub.docker.com/ da repository oluşturmak gerekiyor.
+docker tag consoletockertest oncell/consoletockertest:v1
+docker push oncell/consoletockertest:tagname
+
+
+https://docs.docker.com/engine/reference/commandline/cli/
+
+C:\Users\onsel.aydin\source\repos\DockerTest\CoreMvcDockerTest> docker build -t coremvcdockertest:v1 .
+PS C:\Users\onsel.aydin\source\repos\DockerTest\CoreMvcDockerTest> docker run -d --name web -p 5000:80 coremvcdockertest:v1
+docker ps
+PS C:\> docker stop 6cc6201f8948
+ 
+ 
+ --.net core cli--
+https://docs.microsoft.com/tr-tr/dotnet/core/tools/
+ 
+\CoreMvcDockerTest> dotnet build
+
+
+--örnek asp.net core dockerfile--
+
+#FROM mcr.microsoft.com/dotnet/aspnet:6.0 AS base
+#içinde cli,runtime,asp.net core var.
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS base 
+WORKDIR /app
+#ilk nokta projedeki tüm dosyalar. ikincisi /app klasörüdür.
+COPY . . 
+#nugettan çekilmemiş paketleri çeker.
+RUN dotnet restore 
+RUN dotnet publish CoreMvcDockerTest.csproj -c Release -o out
+#app klasörü içinde out klasörü
+WORKDIR out 
+ENV ASPNETCORE_URLS="http://*:4500"
+#COPY bin/Release/net6.0/publish /app/
+
+ENTRYPOINT ["dotnet", "CoreMvcDockerTest.dll"]
+
+\CoreMvcDockerTest> docker build -t coremvcdockertest:v2 .
+
+\CoreMvcDockerTest> docker run -d -p 5000:4500 --name coremvc 629
+
+--birden fazla container durdurup aynı anda silmek--
+\CoreMvcDockerTest> docker rm f02 fda --force
+
+--Multistage build--
+uygulamayı çalıştırmak için kullandığımız imagedan birden fazla kullanmak.
+Ama uygulamamızın image boyutunu düşürmek.
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS base  bu sdk 700 küsür megabyte
+dolayısı ile taşıması zorlaşıyor.
+örnek multistage dockerfile
+#alttaki 6 satır ilk publish yapan imajım
+#içinde cli,runtime,asp.net core var.
+FROM mcr.microsoft.com/dotnet/sdk:6.0 AS build 
+WORKDIR /app
+COPY *.csproj .
+#nugettan çekilmemiş paketleri çeker.
+RUN dotnet restore 
+#ilk nokta projedeki tüm dosyalar. ikincisi /app klasörüdür.
+COPY . . 
+RUN dotnet publish CoreMvcDockerTest.csproj -c Release -o out
+#altdaki 3 satır bizim yeni imajımız.
+FROM mcr.microsoft.com/dotnet/aspnet:6.0
+#yeni klasör oluşturduk.
+WORKDIR /app
+#build kelimesi üstteki sdk image mizin as ile belirtilen ismi.
+COPY --from=build /app/out . 
+ENV ASPNETCORE_URLS="http://*:4500"
+#COPY bin/Release/net6.0/publish /app/
+ENTRYPOINT ["dotnet", "CoreMvcDockerTest.dll"]
+
+docker build --no-cache -t coremvcdockertest:v2 .   --no-cache tüm layerları sıfırdan oluştursun.
+docker images #önceki image dosyam 700 küsür mb dan 200 e düştü :)
+
+
+--docker ignore--
+**/.dockerignore
+**/docker-compose*
+**/bin
+**/obj
+
+
+https://medium.com/analytics-vidhya/sharing-windows-folders-for-containers-4539f7ed2acf
+
+docker run -d -p 5000:4500 --name mymvc --mount type=bind,source="C:\Users\onsel.aydin\Desktop\images", target="/app/wwwroot/images" b99
+
+--volume--
+c:\>docker volume create images
+c:\>docker run -d -p 5000:4500 --name mymvc -v images:/app/wwwroot/images b99
+
+--environment--
+docker run -p 5000:4500 --env ASPNETCORE_ENVIRONMENT=Development --name myaspnet b99
+projemin özellikler + debug + environment variable
+
+--none images--
+liste
+docker images -f "dangling=true"
+silme
+docker rmi $docker images -f "dangling=true" -q)
+
+
+--environment--
+appsetting içindeki mysqlcon değişkenim.
+docker run -p 5000:4500 --env MySqlCon='Remote Sql Server' --name myaspnet a6d
+
+--tüm çalışan container silmek--
+--force ile çalışan containerlarıda silecektir.
+docker rm $(docker ps -a -q) --force
+
+docker ps -a -q  --bu komut çalışan containerların id lerini döndürür.
+
+EXPOSE 80 yada EXPOSE 443 mikro servislerin birbiri ile haberleşmesi için kullanılır.
+Uyulamanın bu portlardan ayağa kalkacağı anlamına gelmiyor.
